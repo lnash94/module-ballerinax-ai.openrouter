@@ -1,0 +1,7 @@
+target/
+*.jar
+.DS_Store
+ballerina/target/
+ballerina/generated/
+*.lock
+Config.toml
