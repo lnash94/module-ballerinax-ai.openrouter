@@ -1,6 +1,6 @@
-// Copyright (c) 2025 WSO2 LLC. (http://www.wso2.org).
+// Copyright (c) 2026 WSO2 LLC (http://www.wso2.com).
 //
-// WSO2 Inc. licenses this file to you under the Apache License,
+// WSO2 LLC. licenses this file to you under the Apache License,
 // Version 2.0 (the "License"); you may not use this file except
 // in compliance with the License.
 // You may obtain a copy of the License at
@@ -16,7 +16,6 @@
 
 import ballerina/http;
 import ballerina/test;
-import ballerinax/openai.chat;
 
 // ── Chat mock service (port 8081) ────────────────────────────────────────────
 // Used by chat() tests. Routes by first user message content.
@@ -124,38 +123,36 @@ service /llm on new http:Listener(8081) {
 service /llm on new http:Listener(8080) {
     // Change the payload type to JSON due to https://github.com/ballerina-platform/ballerina-library/issues/8048.
     resource function post openrouter/v1/chat/completions(@http:Payload json payload)
-                returns chat:CreateChatCompletionResponse|error {
+                returns json|error {
         string modelName = check payload.model.ensureType();
         boolean validModel = modelName == "openai/gpt-5"
                 || modelName == "anthropic/claude-sonnet-4"
                 || modelName == "deepseek/deepseek-chat";
         test:assertTrue(validModel, string `Unexpected model in request: ${modelName}`);
-        chat:ChatCompletionRequestMessage[] messages = check (check payload.messages).fromJsonWithType();
-        chat:ChatCompletionRequestMessage message = messages[0];
+        map<json>[] messages = check (check payload.messages).cloneWithType();
+        map<json> message = messages[0];
 
-        string|chat:ChatCompletionRequestUserMessageContentPart[]|() rawContent = check message["content"].ensureType();
-        chat:ChatCompletionRequestUserMessageContentPart[]? content;
-        if rawContent is string {
-            content = [{'type: "text", text: rawContent}];
+        json rawContentJson = message["content"];
+        map<json>[] content;
+        if rawContentJson is string {
+            content = [{"type": "text", "text": rawContentJson}];
+        } else if rawContentJson is json[] {
+            content = check rawContentJson.cloneWithType();
         } else {
-            content = rawContent;
-        }
-        if content is () {
-            test:assertFail("Expected content in the payload");
+            return error("Expected content in the payload");
         }
 
-        chat:ChatCompletionRequestUserMessageContentPart initialContentPart = content[0];
-        TextContentPart initialTextContent = check initialContentPart.ensureType();
+        TextContentPart initialTextContent = check content[0].cloneWithType();
         string initialText = initialTextContent.text;
         test:assertEquals(content.toJson(), getExpectedContentParts(initialText).toJson(),
                 string `Test failed for prompt with initial content, ${initialText}`);
-        test:assertEquals(message.role, "user");
-        chat:ChatCompletionTool[]? tools = check (check payload.tools).fromJsonWithType();
+        test:assertEquals(message["role"], "user");
+        Tool[]? tools = check (check payload.tools).cloneWithType();
         if tools is () || tools.length() == 0 {
             test:assertFail("No tools in the payload");
         }
 
-        map<json>? parameters = check tools[0].'function?.parameters.toJson().cloneWithType();
+        map<json>? parameters = tools[0].'function.parameters;
         if parameters is () {
             test:assertFail("No parameters in the expected tool");
         }

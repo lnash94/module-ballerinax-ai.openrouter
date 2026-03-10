@@ -33,7 +33,7 @@ import ballerinax/ai.openrouter;
 
 final ai:ModelProvider openRouterModel = check new openrouter:ModelProvider(
     "openRouterApiKey",
-    modelType = openrouter:ANTHROPIC_CLAUDE_3_5_SONNET
+    modelType = "anthropic/claude-3.5-sonnet"
 );
 ```
 

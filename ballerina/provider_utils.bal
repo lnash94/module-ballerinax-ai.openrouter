@@ -1,4 +1,4 @@
-// Copyright (c) 2025 WSO2 LLC (http://www.wso2.com).
+// Copyright (c) 2026 WSO2 LLC (http://www.wso2.com).
 //
 // WSO2 LLC. licenses this file to you under the Apache License,
 // Version 2.0 (the "License"); you may not use this file except
@@ -19,7 +19,6 @@ import ballerina/ai.observe;
 import ballerina/constraint;
 import ballerina/http;
 import ballerina/lang.array;
-import ballerinax/openai.chat;
 
 type ResponseSchema record {|
     map<json> schema;
@@ -27,10 +26,6 @@ type ResponseSchema record {|
 |};
 
 type DocumentContentPart TextContentPart|ImageContentPart;
-
-type TextContentPart chat:ChatCompletionRequestMessageContentPartText;
-
-type ImageContentPart chat:ChatCompletionRequestMessageContentPartImage;
 
 const JSON_CONVERSION_ERROR = "FromJsonStringError";
 const CONVERSION_ERROR = "ConversionError";
@@ -81,29 +76,27 @@ isolated function parseResponseAsType(string resp,
 }
 
 isolated function getExpectedResponseSchema(typedesc<anydata> expectedResponseTypedesc) returns ResponseSchema|ai:Error {
-    // Restricted at compile-time for now.
-    typedesc<json> td = checkpanic expectedResponseTypedesc.ensureType();
+    typedesc<json>|error td = expectedResponseTypedesc.ensureType();
+    if td is error {
+        return error ai:Error("Unsupported return type for generate(): type must be a subtype of json", td);
+    }
     return generateJsonObjectSchema(check generateJsonSchemaForTypedescAsJson(td));
 }
 
-isolated function getGetResultsToolChoice() returns chat:ChatCompletionNamedToolChoice => {
+isolated function getGetResultsToolChoice() returns NamedToolChoice => {
     'type: FUNCTION,
     'function: {
         name: GET_RESULTS_TOOL
     }
 };
 
-isolated function getGetResultsTool(map<json> parameters) returns chat:ChatCompletionTool[]|ai:Error {
-    chat:FunctionParameters|error toolParams = parameters.cloneWithType();
-    if toolParams is error {
-        return error("Error in generated schema: " + toolParams.message());
-    }
+isolated function getGetResultsTool(map<json> parameters) returns Tool[]|ai:Error {
     return [
         {
             'type: FUNCTION,
             'function: {
                 name: GET_RESULTS_TOOL,
-                parameters: toolParams,
+                parameters: parameters,
                 description: "Tool to call with the response from a large language model (LLM) for a user prompt."
             }
         }
@@ -217,7 +210,7 @@ isolated function generateLlmResponse(http:Client httpClient, string modelType,
 
     DocumentContentPart[] content;
     ResponseSchema responseSchema;
-    chat:ChatCompletionTool[] tools;
+    Tool[] tools;
     do {
         content = check generateChatCreationContent(prompt);
         responseSchema = check getExpectedResponseSchema(expectedResponseTypedesc);
@@ -227,7 +220,7 @@ isolated function generateLlmResponse(http:Client httpClient, string modelType,
         return err;
     }
 
-    chat:CreateChatCompletionRequest request = {
+    GenerateRequest request = {
         messages: [
             {
                 role: ai:USER,
@@ -240,7 +233,7 @@ isolated function generateLlmResponse(http:Client httpClient, string modelType,
     };
     span.addInputMessages(request.messages.toJson());
 
-    chat:CreateChatCompletionResponse|error response = httpClient->post(
+    ChatCompletionResponse|error response = httpClient->post(
         DEFAULT_CHAT_COMPLETION_PATH, request, requestHeaders);
     if response is error {
         ai:Error err = buildHttpError(response);
@@ -261,25 +254,25 @@ isolated function generateLlmResponse(http:Client httpClient, string modelType,
         span.addOutputTokenCount(outputTokens);
     }
 
-    chat:CreateChatCompletionResponse_choices[] choices = response.choices;
+    ChatCompletionChoice[] choices = response.choices;
     if choices.length() == 0 {
         ai:Error err = error("No completion choices");
         span.close(err);
         return err;
     }
 
-    chat:ChatCompletionResponseMessage? message = choices[0].message;
-    chat:ChatCompletionMessageToolCall[]? toolCalls = message?.tool_calls;
+    ChatResponseMessage? message = choices[0].message;
+    ChatToolCall[]? toolCalls = message?.tool_calls;
     if toolCalls is () || toolCalls.length() == 0 {
-        ai:Error err = error(NO_RELEVANT_RESPONSE_FROM_THE_LLM);
+        ai:Error err = error ai:LlmInvalidResponseError(NO_RELEVANT_RESPONSE_FROM_THE_LLM);
         span.close(err);
         return err;
     }
 
-    chat:ChatCompletionMessageToolCall tool = toolCalls[0];
+    ChatToolCall tool = toolCalls[0];
     map<json>|error arguments = tool.'function.arguments.fromJsonStringWithType();
     if arguments is error {
-        ai:Error err = error(NO_RELEVANT_RESPONSE_FROM_THE_LLM);
+        ai:Error err = error ai:LlmInvalidResponseError(NO_RELEVANT_RESPONSE_FROM_THE_LLM);
         span.close(err);
         return err;
     }
@@ -296,7 +289,7 @@ isolated function generateLlmResponse(http:Client httpClient, string modelType,
     anydata|error result = res.ensureType(expectedResponseTypedesc);
     if result is error {
         ai:Error err = error ai:LlmInvalidGenerationError(string `Invalid value returned from the LLM Client, expected: '${
-            expectedResponseTypedesc.toBalString()}', found '${(typeof response).toBalString()}'`);
+            expectedResponseTypedesc.toBalString()}', found '${(typeof res).toBalString()}'`);
         span.close(err);
         return err;
     }
@@ -394,11 +387,14 @@ isolated function buildHttpClient(string apiKey, string serviceUrl,
 
 isolated function convertMessageToJson(ai:ChatMessage[]|ai:ChatMessage messages) returns json|ai:Error {
     if messages is ai:ChatMessage[] {
-        return messages.'map(msg => msg is ai:ChatUserMessage|ai:ChatSystemMessage ? check convertMessageToJson(msg) : msg);
+        json[] result = [];
+        foreach ai:ChatMessage msg in messages {
+            result.push(check convertMessageToJson(msg));
+        }
+        return result;
     }
     if messages is ai:ChatUserMessage|ai:ChatSystemMessage {
-
+        return {role: messages.role, content: check getChatMessageStringContent(messages.content), name: messages.name};
     }
-    return messages !is ai:ChatUserMessage|ai:ChatSystemMessage ? messages :
-        {role: messages.role, content: check getChatMessageStringContent(messages.content), name: messages.name};
+    return messages;
 }

@@ -1,4 +1,4 @@
-// Copyright (c) 2025 WSO2 LLC (http://www.wso2.com).
+// Copyright (c) 2026 WSO2 LLC (http://www.wso2.com).
 //
 // WSO2 LLC. licenses this file to you under the Apache License,
 // Version 2.0 (the "License"); you may not use this file except
@@ -26,7 +26,7 @@ const DEFAULT_EMBEDDINGS_PATH = "/embeddings";
 public isolated distinct client class EmbeddingProvider {
     *ai:EmbeddingProvider;
     private final http:Client openrouterClient;
-    private final OPENROUTER_EMBEDDING_MODEL_NAMES modelType;
+    private final string modelType;
     private final map<string|string[]> & readonly requestHeaders;
 
     # Initializes the OpenRouter embedding provider with the given configuration.
@@ -39,7 +39,7 @@ public isolated distinct client class EmbeddingProvider {
     # + connectionConfig - Additional HTTP connection configuration
     # + return - `()` on successful initialization; otherwise, returns an `ai:Error`
     public isolated function init(@display {label: "API Key"} string apiKey,
-            @display {label: "Model Type"} OPENROUTER_EMBEDDING_MODEL_NAMES modelType,
+            @display {label: "Model Type"} string modelType,
             @display {label: "Service URL"} string serviceUrl = DEFAULT_OPENROUTER_SERVICE_URL,
             @display {label: "Site URL"} string? siteUrl = (),
             @display {label: "Site Name"} string? siteName = (),
@@ -127,7 +127,7 @@ public isolated distinct client class EmbeddingProvider {
             return err;
         }
 
-        string[] input = chunks.map(chunk => chunk.content.toString());
+        string[] input = chunks.map(chunk => <string>chunk.content);
         span.addInputContent(input);
 
         EmbeddingRequest request = {input, model: self.modelType};

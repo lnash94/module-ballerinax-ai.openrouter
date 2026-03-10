@@ -1,6 +1,6 @@
-// Copyright (c) 2025 WSO2 LLC. (http://www.wso2.org).
+// Copyright (c) 2026 WSO2 LLC (http://www.wso2.com).
 //
-// WSO2 Inc. licenses this file to you under the Apache License,
+// WSO2 LLC. licenses this file to you under the Apache License,
 // Version 2.0 (the "License"); you may not use this file except
 // in compliance with the License.
 // You may obtain a copy of the License at
@@ -14,7 +14,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import ballerinax/openai.chat;
 
 isolated function getExpectedParameterSchema(string message) returns map<json> {
     if message.startsWith("Evaluate this") {
@@ -168,28 +167,24 @@ isolated function getTheMockLLMResult(string message) returns string {
     return "INVALID";
 }
 
-isolated function getTestServiceResponse(string content) returns chat:CreateChatCompletionResponse =>
-    {
-    id: "test-id",
-    'object: "chat.completion",
-    created: 1234567890,
-    model: "openai/gpt-4o",
-    choices: [
+isolated function getTestServiceResponse(string content) returns json => {
+    "id": "test-id",
+    "object": "chat.completion",
+    "created": 1234567890,
+    "model": "openai/gpt-4o",
+    "choices": [
         {
-            finish_reason: "tool_calls",
-            index: 0,
-            logprobs: (),
-            message: {
-                content: (),
-                refusal: (),
-                role: "assistant",
-                tool_calls: [
+            "finish_reason": "tool_calls",
+            "index": 0,
+            "message": {
+                "role": "assistant",
+                "tool_calls": [
                     {
-                        id: "tool-call-id",
-                        'type: "function",
-                        'function: {
-                            name: GET_RESULTS_TOOL,
-                            arguments: getTheMockLLMResult(content)
+                        "id": "tool-call-id",
+                        "type": "function",
+                        "function": {
+                            "name": GET_RESULTS_TOOL,
+                            "arguments": getTheMockLLMResult(content)
                         }
                     }
                 ]

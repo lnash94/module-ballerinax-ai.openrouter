@@ -1,4 +1,4 @@
-// Copyright (c) 2025 WSO2 LLC (http://www.wso2.com).
+// Copyright (c) 2026 WSO2 LLC (http://www.wso2.com).
 //
 // WSO2 LLC. licenses this file to you under the Apache License,
 // Version 2.0 (the "License"); you may not use this file except
@@ -79,25 +79,6 @@ public type ConnectionConfig record {|
 |};
 
 
-# Embedding model names available through the OpenRouter unified API.
-# These models convert text into vector representations for semantic search and RAG workflows.
-@display {label: "OpenRouter Embedding Model Names"}
-public enum OPENROUTER_EMBEDDING_MODEL_NAMES {
-    // ── OpenAI ──────────────────────────────────────────────────────────────
-    # OpenAI text-embedding-3-small — fast, efficient, and low-cost
-    OPENAI_TEXT_EMBEDDING_3_SMALL = "openai/text-embedding-3-small",
-    # OpenAI text-embedding-3-large — highest accuracy for OpenAI embeddings
-    OPENAI_TEXT_EMBEDDING_3_LARGE = "openai/text-embedding-3-large",
-    # OpenAI text-embedding-ada-002 — legacy embedding model
-    OPENAI_TEXT_EMBEDDING_ADA_002 = "openai/text-embedding-ada-002",
-    // ── Google ──────────────────────────────────────────────────────────────
-    # Google text-embedding-004 — Google's text embedding model
-    GOOGLE_TEXT_EMBEDDING_004 = "google/text-embedding-004",
-    // ── Mistral ─────────────────────────────────────────────────────────────
-    # Mistral Embed — Mistral's embedding model
-    MISTRAL_EMBED = "mistralai/mistral-embed"
-}
-
 // Internal types for OpenRouter embeddings API (/embeddings endpoint).
 
 type EmbeddingRequest record {|
@@ -124,23 +105,70 @@ type EmbeddingResponse record {
     EmbeddingUsage usage?;
 };
 
-type ToolInfo readonly & record {|
-    string toolList;
-    string toolIntro;
+// ── Content part types for generate() request messages ───────────────────────
+
+type TextContentPart record {|
+    "text" 'type;
+    string text;
 |};
 
-type LlmChatResponse record {|
-    string content;
+type ImageUrlContent record {|
+    string url;
+    string detail = "auto";
 |};
 
-// Minimal OpenRouter chat completion types (OpenAI-compatible subset).
-// Defined here to avoid depending on ballerinax/openai.chat.
+type ImageContentPart record {|
+    "image_url" 'type;
+    ImageUrlContent image_url;
+|};
 
+// ── Tool definition types for generate() requests ────────────────────────────
+
+type ToolFunction record {|
+    string name;
+    string description?;
+    map<json> parameters?;
+|};
+
+type Tool record {|
+    string 'type;
+    ToolFunction 'function;
+|};
+
+type NamedToolChoiceFunction record {|
+    string name;
+|};
+
+type NamedToolChoice record {|
+    string 'type;
+    NamedToolChoiceFunction 'function;
+|};
+
+// ── Request type for generate() ───────────────────────────────────────────────
+
+type GenerateUserMessage record {|
+    string role;
+    (TextContentPart|ImageContentPart)[] content;
+|};
+
+type GenerateRequest record {|
+    GenerateUserMessage[] messages;
+    string model;
+    Tool[] tools?;
+    NamedToolChoice tool_choice?;
+|};
+
+// ── Chat completion wire types (used by chat() path) ─────────────────────────
+
+// Used in request serialisation (legacy function_call field).
 type ChatFunctionCall record {|
     string name;
     string arguments;
 |};
 
+// Used in response deserialisation (tool_calls[].function field).
+// Kept separate from ChatFunctionCall intentionally — request and response
+// contexts are distinct and may diverge independently.
 type ChatToolCallFunction record {|
     string name;
     string arguments;
@@ -157,7 +185,7 @@ type ChatToolCall record {
 type ChatRequestMessage record {
     string role;
     string? content?;
-    string name?; // non-nullable optional — absent from JSON when not set
+    string name?; 
     ChatFunctionCall? function_call?;
 };
 
@@ -190,5 +218,5 @@ type ChatCompletionChoice record {
 type ChatCompletionResponse record {
     string id;
     ChatCompletionChoice[] choices;
-    ChatUsage? usage?;
+    ChatUsage usage?;
 };
