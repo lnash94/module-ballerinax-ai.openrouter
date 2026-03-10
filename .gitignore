@@ -55,3 +55,7 @@ docker.env
 
 # ignore ballerina installer in github runner
 *.deb
+
+# JVM crash logs
+hs_err_pid*
+replay_pid*
