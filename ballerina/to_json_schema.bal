@@ -29,8 +29,6 @@ type JsonArraySchema record {|
     JsonSchema items;
 |};
 
-public annotation map<json> JsonSchema on type;
-
 isolated function generateJsonSchemaForTypedescAsJson(typedesc<json> expectedResponseTypedesc) returns map<json>|ai:Error =>
     let map<json>? ann = expectedResponseTypedesc.@ai:JsonSchema in ann
                 ?: check generateJsonSchemaForTypedescNative(expectedResponseTypedesc)
@@ -39,9 +37,11 @@ isolated function generateJsonSchemaForTypedescAsJson(typedesc<json> expectedRes
 isolated function generateJsonSchemaForTypedesc(typedesc<json> expectedResponseTypedesc, boolean nilableType)
         returns JsonSchema|JsonArraySchema|map<json>|ai:Error {
     if isSimpleType(expectedResponseTypedesc) {
-        return <JsonSchema>{
-            'type: getStringRepresentation(<typedesc<json>>expectedResponseTypedesc)
-        };
+        string typeName = getSimpleTypeName(expectedResponseTypedesc);
+        if nilableType {
+            return <JsonSchema>{oneOf: [{'type: typeName}, {'type: "null"}]};
+        }
+        return <JsonSchema>{'type: typeName};
     }
 
     boolean isArray = expectedResponseTypedesc is typedesc<json[]>;
@@ -49,25 +49,28 @@ isolated function generateJsonSchemaForTypedesc(typedesc<json> expectedResponseT
     if isArray {
         typedesc<json> arrayMemberType = getArrayMemberType(<typedesc<json[]>>expectedResponseTypedesc);
         if isSimpleType(arrayMemberType) {
-            return <JsonArraySchema>{
-                items: !nilableType ? {
-                        'type: getStringRepresentation(<typedesc<json>>arrayMemberType)
-                    } :
-                    {
-                        oneOf: [
-                            {
-                                'type: getStringRepresentation(<typedesc<json>>arrayMemberType)
-                            },
-                            {
-                                'type: "null"
-                            }
-                        ]
-                    }
-            };
+            boolean nilableMember = containsNil(arrayMemberType);
+            JsonSchema memberSchema = nilableMember
+                ? <JsonSchema>{oneOf: [{'type: getSimpleTypeName(arrayMemberType)}, {'type: "null"}]}
+                : <JsonSchema>{'type: getSimpleTypeName(arrayMemberType)};
+            JsonArraySchema arraySchema = {items: memberSchema};
+            if nilableType {
+                return <JsonSchema>{oneOf: [arraySchema, {'type: "null"}]};
+            }
+            return arraySchema;
         }
     }
 
     return error("Runtime schema generation is not yet supported for type " + expectedResponseTypedesc.toString());
+}
+
+isolated function getSimpleTypeName(typedesc<json> fieldType) returns string {
+    if fieldType is typedesc<()> { return "null"; }
+    if fieldType is typedesc<string?> { return "string"; }
+    if fieldType is typedesc<int?> { return "integer"; }
+    if fieldType is typedesc<float?|decimal?> { return "number"; }
+    if fieldType is typedesc<boolean?> { return "boolean"; }
+    return "null";
 }
 
 isolated function getArrayMemberType(typedesc<json[]> expectedResponseTypedesc) returns typedesc<json> = @java:Method {

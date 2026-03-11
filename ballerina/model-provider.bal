@@ -208,6 +208,9 @@ public isolated distinct client class ModelProvider {
 
     private isolated function convertResponseToAssistantMessage(ChatResponseMessage? message)
     returns ai:ChatAssistantMessage|ai:LlmError {
+        if message is () {
+            return error ai:LlmInvalidResponseError("Invalid LLM response: missing message in choice");
+        }
         do {
             ai:ChatAssistantMessage chatAssistantMessage = {role: ai:ASSISTANT};
             chatAssistantMessage.content = message?.content;
@@ -223,13 +226,15 @@ public isolated distinct client class ModelProvider {
             } else {
                 ChatToolCall[]? toolCalls = message?.tool_calls;
                 if toolCalls is ChatToolCall[] && toolCalls.length() > 0 {
-                    json arguments = check toolCalls[0].'function.arguments.fromJsonString();
-                    chatAssistantMessage.toolCalls = [
-                        {
-                            name: toolCalls[0].'function.name,
+                    ai:FunctionCall[] functionCalls = [];
+                    foreach ChatToolCall toolCall in toolCalls {
+                        json arguments = check toolCall.'function.arguments.fromJsonString();
+                        functionCalls.push({
+                            name: toolCall.'function.name,
                             arguments: check arguments.cloneWithType()
-                        }
-                    ];
+                        });
+                    }
+                    chatAssistantMessage.toolCalls = functionCalls;
                 }
             }
             return chatAssistantMessage;

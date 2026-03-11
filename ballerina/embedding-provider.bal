@@ -97,8 +97,8 @@ public isolated distinct client class EmbeddingProvider {
         }
 
         EmbeddingDataItem[] data = response.data;
-        if data.length() == 0 {
-            ai:Error err = error ai:LlmInvalidResponseError("No embeddings returned from the model");
+        if data.length() != 1 || data[0].index != 0 {
+            ai:Error err = error ai:LlmInvalidResponseError("Invalid embedding response: expected exactly one embedding with index 0");
             span.close(err);
             return err;
         }
@@ -148,6 +148,19 @@ public isolated distinct client class EmbeddingProvider {
         EmbeddingDataItem[] data = response.data;
         if data.length() == 0 {
             ai:Error err = error ai:LlmInvalidResponseError("No embeddings returned from the model");
+            span.close(err);
+            return err;
+        }
+        if data.length() != chunks.length() {
+            ai:Error err = error ai:LlmInvalidResponseError(
+                string `Invalid embedding response: expected ${chunks.length()} embeddings but received ${data.length()}`);
+            span.close(err);
+            return err;
+        }
+        int[] indices = from EmbeddingDataItem item in data select item.index;
+        int[] expectedIndices = from int i in 0 ..< chunks.length() select i;
+        if indices.sort("ascending") != expectedIndices {
+            ai:Error err = error ai:LlmInvalidResponseError("Invalid embedding response: indices do not form a complete 0..n-1 sequence");
             span.close(err);
             return err;
         }
