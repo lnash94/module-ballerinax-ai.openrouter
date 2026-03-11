@@ -420,7 +420,7 @@ modules = [
 [[package]]
 org = "sumudunissanka"
 name = "openrouter"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
 	{org = "ballerina", name = "constraint"},
 	{org = "ballerina", name = "data.jsondata"},
